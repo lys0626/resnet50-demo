@@ -8,10 +8,17 @@ class model(nn.Module):
     def __init__(self, num_classes, pretrained=True, args=None):
         super(model, self).__init__()
         
-        # 1. 初始化标准 ResNet50 (默认为 ImageNet 1000类结构)
+        # 1. 初始化标准 ResNet50 骨架
         M = torchvision.models.resnet50(pretrained=False)
         
-        # 2. 加载自定义预训练权重
+        # 2. 提前定义分类头 (为了在加载权重时能赋值)
+        self.num_classes = num_classes
+        self.glb_pooling = nn.AdaptiveMaxPool2d((1, 1))
+        # 获取输入通道数 (ResNet50为2048)
+        in_channels = M.layer4[-1].conv3.out_channels 
+        self.cls = nn.Linear(in_channels, num_classes)
+
+        # 3. 加载自定义预训练权重
         if pretrained:
             weight_path = r'/data/dsj/lys/SpliceMix-resnet50/pretrain-weight/pretrain_CXR14.pth'
             if os.path.exists(weight_path):
@@ -25,39 +32,48 @@ class model(nn.Module):
                         state_dict = checkpoint
                     
                     new_state_dict = {}
+                    
                     for k, v in state_dict.items():
                         # 去除 DDP 的 module. 前缀
                         name = k[7:] if k.startswith('module.') else k
                         
-                        # --- 关键修改：过滤掉全连接层 (fc) ---
-                        # 无论它是叫 fc.weight, fc.bias, 还是 fc.linear...
-                        # 只要 key 中包含 'fc' 且位于顶层名称，就跳过
-                        if name.startswith('fc.') or name.startswith('classifier.'):
-                            continue
+                        # --- 修改逻辑：尝试加载分类头权重 ---
+                        # 检查 key 是否包含 fc, classifier, cls 等常见命名
+                        # 并且形状必须与当前模型的 self.cls 完全一致 (例如 [14, 2048])
+                        if any(x in name for x in ['fc', 'classifier', 'cls']):
+                            # 尝试加载 Weight
+                            if 'weight' in name and v.shape == self.cls.weight.shape:
+                                self.cls.weight.data.copy_(v)
+                                print(f"=> Loaded classifier weight from: {name}")
+                                continue
+                            # 尝试加载 Bias
+                            elif 'bias' in name and v.shape == self.cls.bias.shape:
+                                self.cls.bias.data.copy_(v)
+                                print(f"=> Loaded classifier bias from: {name}")
+                                continue
                             
+                            # 如果形状不匹配（例如预训练是1000类，当前是14类），则跳过并打印提示
+                            # 或者只是简单的忽略，不加入 new_state_dict
+                            if name.startswith('fc.') or name.startswith('classifier.'):
+                                continue
+
+                        # 其他层则加入字典，准备加载进 Backbone (M)
                         new_state_dict[name] = v
                             
-                    # 加载权重 (strict=False 允许 state_dict 缺少 fc 层参数)
+                    # 加载 Backbone 权重 (strict=False)
                     msg = M.load_state_dict(new_state_dict, strict=False)
-                    print(f"=> Loaded backbone weights. Keys filtered/missing: {msg.missing_keys}")
+                    print(f"=> Loaded backbone weights.")
                     
                 except Exception as e:
                     print(f"Error loading custom weights: {e}")
             else:
                 print(f"=> Warning: Custom weight file not found at {weight_path}. Using random initialization.")
 
-        # 3. 构建 Backbone (复用 M 的层，不包含 fc)
+        # 4. 构建 Backbone (复用 M 的层，不包含 fc)
         self.backbone = nn.Sequential(
             M.conv1, M.bn1, M.relu, M.maxpool,
             M.layer1, M.layer2, M.layer3, M.layer4
         )
-        
-        self.num_classes = num_classes
-
-        # 4. 定义新的分类头
-        self.glb_pooling = nn.AdaptiveMaxPool2d((1, 1))
-        in_channels = M.layer4[-1].conv3.out_channels # 2048
-        self.cls = nn.Linear(in_channels, num_classes)
 
     def forward(self, inputs, args=None):
         fea4 = self.backbone(inputs)

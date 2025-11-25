@@ -1,5 +1,5 @@
 import os
-
+from . import ResNet_50
 path = os.getcwd()
 opj = os.path.join
 inter_path = 'models' if 'models' not in path else ''
