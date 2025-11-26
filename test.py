@@ -165,7 +165,7 @@ def run_evaluation(args):
         if not metrics_res:
             print("警告: 未能计算出指标 (可能数据为空)。")
         else:
-            print("\n=== ws-MulSupCon 风格指标 ===")
+            print("\n=== 指标 ===")
             print(f"mAUC:     {metrics_res.get('mAUC', -1):.4f}")
             print(f"Micro F1: {metrics_res.get('micro_F1', -1):.4f}")
             print(f"Macro F1: {metrics_res.get('macro_F1', -1):.4f}")
