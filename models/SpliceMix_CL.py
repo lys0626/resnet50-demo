@@ -9,13 +9,13 @@ class model(nn.Module):
         super(model, self).__init__()
         M = torchvision.models.resnet50(pretrained=False)
         
-        # --- 修改 1: 提前定义分类头 (为了在加载权重时能赋值) ---
+        
+        # 2. 提前定义分类头 (为了结构完整性，建议保留在此处)
         self.num_classes = num_classes
         self.glb_pooling = nn.AdaptiveMaxPool2d((1, 1))
-        # ResNet50 layer4 输出通道通常是 2048
         self.cls = nn.Linear(M.layer4[-1].conv3.out_channels, num_classes)
-        
-        # 2. 加载自定义预训练权重
+
+        # 3. 加载自定义预训练权重
         if pretrained:
             weight_path = r'/data/dsj/lys/SpliceMix-resnet50/pretrain-weight/pretrain_CXR14.pth'
             if os.path.exists(weight_path):
@@ -23,40 +23,33 @@ class model(nn.Module):
                 try:
                     checkpoint = torch.load(weight_path, map_location='cpu')
                     
+                    # --- [必须修改] 适配您的权重文件结构 ---
                     if 'state_dict' in checkpoint:
                         state_dict = checkpoint['state_dict']
+                    elif 'encoder' in checkpoint:  # 您的文件包含这个键
+                        state_dict = checkpoint['encoder']
+                    elif 'model' in checkpoint:
+                        state_dict = checkpoint['model']
                     else:
                         state_dict = checkpoint
                     
                     new_state_dict = {}
                     for k, v in state_dict.items():
-                        # 去除 DDP 的 module. 前缀
-                        name = k[7:] if k.startswith('module.') else k
+                        name = k
+                        # --- [必须修改] 清洗前缀 ---
+                        if name.startswith('module.'): name = name[7:]
+                        if name.startswith('encoder.'): name = name[8:] # 您的文件包含这个前缀
                         
-                        # --- 修改 2: 尝试加载分类头权重 ---
-                        # 检查 key 是否包含 fc, classifier, cls 等常见命名
-                        if any(x in name for x in ['fc', 'classifier', 'cls']):
-                            # 尝试加载 Weight (形状必须完全匹配)
-                            if 'weight' in name and v.shape == self.cls.weight.shape:
-                                self.cls.weight.data.copy_(v)
-                                print(f"=> Loaded classifier weight from: {name}")
-                                continue
-                            # 尝试加载 Bias
-                            elif 'bias' in name and v.shape == self.cls.bias.shape:
-                                self.cls.bias.data.copy_(v)
-                                print(f"=> Loaded classifier bias from: {name}")
-                                continue
+                        # 过滤掉全连接层 (fc/classifier)
+                        # 虽然文件中可能没有，但保留此判断更安全
+                        if name.startswith('fc.') or name.startswith('classifier.') or name.startswith('cls.'):
+                            continue
                             
-                            # 如果形状不匹配，则跳过 (不加入 new_state_dict)
-                            if name.startswith('fc.') or name.startswith('classifier.'):
-                                continue
-
-                        # 其他层则加入字典，准备加载进 Backbone (M)
                         new_state_dict[name] = v
                             
-                    # 加载 Backbone 权重 (strict=False 允许 state_dict 缺少 fc 层参数)
+                    # 加载权重到 Backbone
                     msg = M.load_state_dict(new_state_dict, strict=False)
-                    print(f"=> Loaded backbone weights.")
+                    print(f"=> Loaded backbone weights. Missing keys: {msg.missing_keys}")
                     
                 except Exception as e:
                     print(f"Error loading custom weights: {e}")
@@ -64,14 +57,10 @@ class model(nn.Module):
                 print(f"=> Warning: Custom weight file not found at {weight_path}. Using random initialization.")
         self.backbone = nn.Sequential(M.conv1, M.bn1, M.relu, M.maxpool,
                                       M.layer1, M.layer2, M.layer3, M.layer4, )
-        self.num_classes = num_classes
-
-        self.glb_pooling = nn.AdaptiveMaxPool2d((1, 1))
-        self.cls = nn.Linear(M.layer4[-1].conv3.out_channels, num_classes)
 
     def forward(self, inputs, args=None):  #
 
-        feas = self.backbone(inputs)  # bs, C, 14, 14
+        feas = self.backbone(inputs)  # bs, C, 28, 28
         fea_gp = self.glb_pooling(feas).flatten(1)  # bs, C
         preds = self.cls(fea_gp)
 
