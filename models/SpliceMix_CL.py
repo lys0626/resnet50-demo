@@ -3,60 +3,19 @@ import torchvision
 import torch.nn as nn
 import torch.nn.functional as F
 import models.loss_fns as loss_fns
-import os
+
 class model(nn.Module):
     def __init__(self, num_classes, pretrained=True, args=None):
         super(model, self).__init__()
-        M = torchvision.models.resnet50(pretrained=False)
-        
-        
-        # 2. 提前定义分类头 (为了结构完整性，建议保留在此处)
-        self.num_classes = num_classes
-        self.glb_pooling = nn.AdaptiveMaxPool2d((1, 1))
-        self.cls = nn.Linear(M.layer4[-1].conv3.out_channels, num_classes)
-
-        # 3. 加载自定义预训练权重
-        if pretrained:
-            weight_path = r'/data/dsj/lys/SpliceMix-resnet50/pretrain-weight/pretrain_CXR14.pth'
-            if os.path.exists(weight_path):
-                print(f"=> loading custom pretrained weights from {weight_path}")
-                try:
-                    checkpoint = torch.load(weight_path, map_location='cpu')
-                    
-                    # --- [必须修改] 适配您的权重文件结构 ---
-                    if 'state_dict' in checkpoint:
-                        state_dict = checkpoint['state_dict']
-                    elif 'encoder' in checkpoint:  # 您的文件包含这个键
-                        state_dict = checkpoint['encoder']
-                    elif 'model' in checkpoint:
-                        state_dict = checkpoint['model']
-                    else:
-                        state_dict = checkpoint
-                    
-                    new_state_dict = {}
-                    for k, v in state_dict.items():
-                        name = k
-                        # --- [必须修改] 清洗前缀 ---
-                        if name.startswith('module.'): name = name[7:]
-                        if name.startswith('encoder.'): name = name[8:] # 您的文件包含这个前缀
-                        
-                        # 过滤掉全连接层 (fc/classifier)
-                        # 虽然文件中可能没有，但保留此判断更安全
-                        if name.startswith('fc.') or name.startswith('classifier.') or name.startswith('cls.'):
-                            continue
-                            
-                        new_state_dict[name] = v
-                            
-                    # 加载权重到 Backbone
-                    msg = M.load_state_dict(new_state_dict, strict=False)
-                    print(f"=> Loaded backbone weights. Missing keys: {msg.missing_keys}")
-                    
-                except Exception as e:
-                    print(f"Error loading custom weights: {e}")
-            else:
-                print(f"=> Warning: Custom weight file not found at {weight_path}. Using random initialization.")
+        M = torchvision.models.resnet50(pretrained=pretrained)
+        # res = torchvision.models.resnet101(pretrained=pretrained, norm_layer=lib.FrozenBatchNorm2d)
+        # res = torchvision.models.resnet50(True)
         self.backbone = nn.Sequential(M.conv1, M.bn1, M.relu, M.maxpool,
                                       M.layer1, M.layer2, M.layer3, M.layer4, )
+        self.num_classes = num_classes
+
+        self.glb_pooling = nn.AdaptiveMaxPool2d((1, 1))
+        self.cls = nn.Linear(M.layer4[-1].conv3.out_channels, num_classes)
 
     def forward(self, inputs, args=None):  #
 

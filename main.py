@@ -20,7 +20,7 @@ parser.add_argument('-n_grids', default=[0,], nargs='+', type=int, help="Number 
 # Secondary Parameters
 parser.add_argument('-ims', '--image-size', default=448, type=int, help="Image size for training and testing")
 parser.add_argument('-eps', '--epoch-step', default=[40, 60], nargs='+', type=int, help="Epoch step for linearly decaying learning rate")
-parser.add_argument('-ep', '--epochs', default=80, type=int, help="Max epochs")
+parser.add_argument('-ep', '--epochs', default=200, type=int, help="Max epochs")
 parser.add_argument('-o', '--optimizer', default='SGD', type=str, help="The optimizer can be only chosen from {\'SGD\', \'Adam\'} for now. More may be implemented later")
 parser.add_argument('-e', '--evaluate', default=1, type=int, help="-1: do not evaluate; 0: enter evaluation mode; e>0: evaluate once per e times of training epoch")
 parser.add_argument('-lrp', '--lrp', '--learning-rate-pretrained', default=0.1, type=float, help="The learning rate decay for pretrained layers")
@@ -34,7 +34,7 @@ parser.add_argument('--seed', default=95, type=int, help="Seed for random, numpy
 parser.add_argument('--save-dir', default=r'checkpoint', type=str, help="The save directory for selected checkpoints of model")
 parser.add_argument('-ver', '--print-verbose', default=1, type=int, help="0: no verbose; 1: print CP, CR, CF1, OP, OR, OF1; 2: print 1 + top_k")
 parser.add_argument('--acc-top-k', default=3, type=int, help="Top k metrics")
-parser.add_argument('-wup', '--warmup-epochs', default=0, type=int, help="0: not use warmup; >1: epochs for warmup")
+parser.add_argument('-wup', '--warmup-epochs', default=5, type=int, help="0: not use warmup; >1: epochs for warmup")
 parser.add_argument('-dis_amp', '--disable-amp', default=False, action='store_true', help="True: not use amp (Automatic Mixed Precision); False: use amp")
 parser.add_argument('--backend', default='nccl', type=str, help="")
 parser.add_argument('--master-addr', default='127.0.0.1', type=str, help="")

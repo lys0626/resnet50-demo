@@ -246,11 +246,11 @@ class Engine(object):
             return
         else:
             file = self.args.resume
-            # 适配单机/多机加载
             map_location = {'cuda:%d' % 0: 'cuda:%d' % self.rank}
+            # 加载文件
             checkpoint = torch.load(file, map_location=map_location)
         
-        # 1. 尝试恢复 Log 信息 (可选)
+        # 尝试恢复 Log 信息
         try:
             if self.args.start_epoch == 0:
                 self.args.start_epoch = checkpoint['epoch'] + 1
@@ -258,32 +258,34 @@ class Engine(object):
         except:
             pass
 
-        # 2. 核心修复：使用正确的键名 'state_dict'
+        # --- 修正后的加载逻辑 ---
         try:
-            # 如果您的 checkpoint 键名是 'state_dict'
-            if 'state_dict' in checkpoint:
-                state_dict = checkpoint['state_dict']
-            # 兼容旧版本或 'model_state_dict'
-            elif 'model_state_dict' in checkpoint:
-                state_dict = checkpoint['model_state_dict']
+            # 1. 确定 state_dict 在哪里
+            if 'model_state_dict' in checkpoint:
+                loaded_dict = checkpoint['model_state_dict']
+            elif 'state_dict' in checkpoint:
+                loaded_dict = checkpoint['state_dict']
             else:
-                state_dict = checkpoint # 最后的兜底
+                loaded_dict = checkpoint
 
-            # 处理 DDP 的 module. 前缀 (如果当前模型没有 module. 但权重有)
+            # 2. 处理键名 (去除 module. 前缀以匹配单机模型)
             new_state_dict = {}
-            for k, v in state_dict.items():
-                if k.startswith('module.') and not hasattr(self.model, 'module'):
-                    new_state_dict[k[7:]] = v
+            for k, v in loaded_dict.items():
+                if k.startswith('module.'):
+                    name = k[7:] # 去除 'module.'
                 else:
-                    new_state_dict[k] = v
+                    name = k
+                new_state_dict[name] = v
             
-            # 加载权重
-            self.model.load_state_dict(new_state_dict)
-            self.logger.info(f"==> Successfully loaded checkpoint from {file}")
-            
+            # 3. 加载权重 (strict=False 允许稍微的不匹配，但关键是不要主动过滤 cls)
+            # 这会将训练好的 cls.weight 和 cls.bias 正确加载进去
+            msg = self.model.load_state_dict(new_state_dict, strict=False)
+            self.logger.info(f"==> Loaded checkpoint from {file}")
+            self.logger.info(f"    Missing keys: {msg.missing_keys}")
+            self.logger.info(f"    Unexpected keys: {msg.unexpected_keys}")
+
         except Exception as e:
             self.logger.info(f"==> Failed to load checkpoint: {e}")
-            # 这里不要直接 pass，否则你不知道加载失败了
 
     def reset_meters(self):
         self.meter['loss'] = metric.AverageMeter('loss')
