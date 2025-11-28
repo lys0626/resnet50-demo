@@ -7,7 +7,7 @@ from engine import Engine
 import os
 
 parser = argparse.ArgumentParser(description="Model Configuration")
-parser.add_argument('-m', '--model', default='ResNet-101', type=str, help="The model to be ran according to ./models package")
+parser.add_argument('-m', '--model', default='ResNet-50', type=str, help="The model to be ran according to ./models package")
 parser.add_argument('-lr', '--lr', '--learning-rate', default=0.05, type=float, help="Learning rate")
 parser.add_argument('-bs', '--batch-size', default=32, type=int, help="Batch size for training and valuating")
 parser.add_argument('-ds', '--data-set', default='MS-COCO', type=str, help="Data set [MS-COCO, VOC2007,NIH-CHEST,MIMIC,CHEXPERT]")
@@ -18,9 +18,9 @@ parser.add_argument('-grids', default=['2x2', ], nargs='+', type=str, help="Grid
 parser.add_argument('-n_grids', default=[0,], nargs='+', type=int, help="Number of mixed images in each strategy; 0 denotes a quarter of regualr batch size will be used.")
 
 # Secondary Parameters
-parser.add_argument('-ims', '--image-size', default=448, type=int, help="Image size for training and testing")
+parser.add_argument('-ims', '--image-size', default=224, type=int, help="Image size for training and testing")
 parser.add_argument('-eps', '--epoch-step', default=[40, 60], nargs='+', type=int, help="Epoch step for linearly decaying learning rate")
-parser.add_argument('-ep', '--epochs', default=200, type=int, help="Max epochs")
+parser.add_argument('-ep', '--epochs', default=100, type=int, help="Max epochs")
 parser.add_argument('-o', '--optimizer', default='SGD', type=str, help="The optimizer can be only chosen from {\'SGD\', \'Adam\'} for now. More may be implemented later")
 parser.add_argument('-e', '--evaluate', default=1, type=int, help="-1: do not evaluate; 0: enter evaluation mode; e>0: evaluate once per e times of training epoch")
 parser.add_argument('-lrp', '--lrp', '--learning-rate-pretrained', default=0.1, type=float, help="The learning rate decay for pretrained layers")
