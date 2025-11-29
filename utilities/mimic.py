@@ -33,7 +33,7 @@ class mimic(Dataset):
         """
         self.root = root
         self.transform = transform
-        self.img_folder = 'img_384' # [cite: image_e1cd19.png]
+        self.img_folder = 'img_224' # [cite: image_e1cd19.png]
 
         if mode == 'train':
             x_path = os.path.join(self.root, 'train_x.json')

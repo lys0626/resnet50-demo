@@ -165,7 +165,7 @@ def run_evaluation(args):
         if not metrics_res:
             print("警告: 未能计算出指标 (可能数据为空)。")
         else:
-            print("\n=== 指标 ===")
+            print("\n=== ws-MulSupCon 风格指标 ===")
             print(f"mAUC:     {metrics_res.get('mAUC', -1):.4f}")
             print(f"Micro F1: {metrics_res.get('micro_F1', -1):.4f}")
             print(f"Macro F1: {metrics_res.get('macro_F1', -1):.4f}")
@@ -175,6 +175,25 @@ def run_evaluation(args):
             print(f"Macro P:  {metrics_res.get('macro_P', -1):.4f}")
             print(f"Macro R:  {metrics_res.get('macro_R', -1):.4f}")
             print("=" * 30)
+
+            # --- 新增：打印每类 AUROC ---
+            if 'auc_list' in metrics_res:
+                print("--- Per Class AUROC ---")
+                # 尝试获取类名
+                classes = getattr(real_test_set, 'classes', [])
+                auc_list = metrics_res['auc_list']
+                
+                # 如果获取不到类名，使用默认名称
+                if not classes:
+                    classes = [f'Class_{i}' for i in range(len(auc_list))]
+                
+                for i, auc in enumerate(auc_list):
+                    name = classes[i] if i < len(classes) else f'Class_{i}'
+                    if auc != -1.0:
+                        print(f"{name:<30}: {auc:.4f}")
+                    else:
+                        print(f"{name:<30}: - (No valid samples)")
+                print("=" * 30)
 
     if args.distributed:
         utils_ddp.cleanup()

@@ -39,6 +39,7 @@ class AveragePrecisionMeter(object):
     def compute_all_metrics(self):
         """
         计算 ws-MulSupCon 风格的指标: mAUC, Micro/Macro P/R/F1
+        同时返回 auc_list 以供打印每类指标
         """
         if self.scores.numel() == 0:
             return {}
@@ -47,19 +48,23 @@ class AveragePrecisionMeter(object):
         y_true = self.targets.numpy()
         y_true[y_true == -1] = 0 # 确保没有 -1 标签
 
-        # 1. 计算 mAUC
+        # 1. 计算 mAUC (及 per-class AUC)
         y_probs = 1 / (1 + np.exp(-y_scores)) # Sigmoid
         
         auc_list = []
         for i in range(y_true.shape[1]):
+            val = -1.0
             try:
+                # 必须同时存在正类和负类才能计算 AUC
                 if len(np.unique(y_true[:, i])) == 2:
-                    auc = metrics.roc_auc_score(y_true[:, i], y_probs[:, i])
-                    auc_list.append(auc)
+                    val = metrics.roc_auc_score(y_true[:, i], y_probs[:, i])
             except ValueError:
                 pass
+            auc_list.append(val)
         
-        mAUC = np.mean(auc_list) if auc_list else 0.0
+        # 计算平均值时只考虑有效的 AUC
+        valid_aucs = [a for a in auc_list if a != -1.0]
+        mAUC = np.mean(valid_aucs) if valid_aucs else 0.0
 
         # 2. 计算 P, R, F1 (Micro / Macro)
         # 阈值 0.5
@@ -67,6 +72,7 @@ class AveragePrecisionMeter(object):
 
         return {
             'mAUC': mAUC,
+            'auc_list': auc_list, # <--- 新增: 返回每类 AUC 列表
             'micro_P': metrics.precision_score(y_true, y_pred, average='micro', zero_division=0),
             'micro_R': metrics.recall_score(y_true, y_pred, average='micro', zero_division=0),
             'micro_F1': metrics.f1_score(y_true, y_pred, average='micro', zero_division=0),
