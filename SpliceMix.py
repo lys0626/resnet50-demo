@@ -23,12 +23,13 @@ class SpliceMix(object):
         self.grids = grids
         self.n_grids = n_grids
         self.use_asym = True
-        self.config_default = {'1x2': .7, '2x2': .3, '2x3': .0, 'drop_rate': .3}
-
+        # self.config_default = {'1x2': .7, '2x2': .3, '2x3': .0, 'drop_rate': .3}原论文中采用的
+        #以下是只采用2*2数据增强，并且不丢弃块
+        self.config_default = {'1x2': 1, '2x2': -1, '2x3': 1, 'drop_rate': 0}
         self.mixer = self.Smix if self.Mini == False else self.Smix_minimalism
         if self.Default: print("SpliceMix w/ default setting")
         if self.Mini: print("SpliceMix w/ minimalism setting")
-
+    
     def Smix(self, inputs, targets, ):
         if np.random.rand(1) > self.mix_prob:
             return inputs, targets, {}
@@ -51,6 +52,7 @@ class SpliceMix(object):
         mix_ind = torch.zeros((bs), device=inputs.device)
         rand_ind = np.asarray([random.sample(range(bs), bs) for i in range(10)]).reshape(-1)  # enough for griding?
         mix_dict = {'rand_inds': [], 'rows': [], 'cols': [], 'n_drops': [], 'drop_inds': []}
+            #grids=['1x2', '2x3-2'], n_grids=[1, 2]
         for g, ng in zip(self.grids, self.n_grids):
             g_row, g_col = [int(t) if '-' not in t else t.split('-') for t in g.split('x')]
             (g_col, n_drop) = [int(t) for t in g_col] if type(g_col) is list else (g_col, 0)
@@ -167,13 +169,14 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import torchvision.transforms as transforms
     import numpy as np
-    img_dir = 'E:\PhD\Data_set\ImageSet\VOC2007\VOCdevkit\VOC2007\JPEGImages'
+    import pandas as pd
+    img_dir = '/data/nih-chest-xrays/img_224'
 
     bs = 8
-    imgs, ptgts = get_imgs(dir=img_dir, bs=bs)
+    imgs, ptgts = get_imgs(dir=img_dir, bs=bs,num_classes=14)
     # imgs, ptgts = imgs.cuda(), ptgts.cuda()
     print(ptgts, ptgts.sum(-1))
-    mixer = SpliceMix(mode='SpliceMix', grids=['1x2', '2x3-2'], n_grids=[1, 2]).mixer
+    mixer = SpliceMix(mode='SpliceMix', grids=['2x2', ], n_grids=[2, 2]).mixer
     imgs_mix, tgts_mix, flag = mixer(imgs, ptgts)
     print(flag)
     print(tgts_mix[-5:])

@@ -31,7 +31,7 @@ parser.add_argument('-motum', '--momentum', default=0.9, type=float, help="Momen
 parser.add_argument('-wd', '--weight-decay', default=1e-4, type=float, help="Weight decay for SGD or Adam.")
 parser.add_argument('-lrd', '--lr_decay','--learning-rate-decay', default=0.1, type=float, help="Learning rate decay for each 'epoch step'")
 parser.add_argument('--seed', default=95, type=int, help="Seed for random, numpy.random, torch.random, torch.cuda")
-parser.add_argument('--save-dir', default=r'checkpoint', type=str, help="The save directory for selected checkpoints of model")
+parser.add_argument('--save-dir', default=r'checkpoint_2x2', type=str, help="The save directory for selected checkpoints of model")
 parser.add_argument('-ver', '--print-verbose', default=1, type=int, help="0: no verbose; 1: print CP, CR, CF1, OP, OR, OF1; 2: print 1 + top_k")
 parser.add_argument('--acc-top-k', default=3, type=int, help="Top k metrics")
 parser.add_argument('-wup', '--warmup-epochs', default=5, type=int, help="0: not use warmup; >1: epochs for warmup")

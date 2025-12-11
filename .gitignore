@@ -7,3 +7,4 @@
 /wandb
 /pretrain-weight
 *.pth
+/checkpoint*

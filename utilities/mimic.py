@@ -1,108 +1,115 @@
-import json
 import os
 import numpy as np
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
-
-def load_json(file_path):
-    """一个辅助函数，用于从磁盘加载 JSON 文件。"""
-    with open(file_path, 'rt') as f:
-        return json.load(f)
+import pandas as pd
 
 class mimic(Dataset): 
     """
-    用于加载 /data/mimic_cxr/mimic/ 目录结构 [cite: image_e1cd19.png] 的数据集类。
+    适配 /data/mimic_cxr/PA/ 目录结构的 MIMIC 数据集类。
+    读取 CSV 文件并加载 img_224 文件夹中的图片。
     """
     task = 'multilabel'
     
-    # --- MODIFIED: 使用您提供的 14 个标签列表 ---
-    # 假设这个列表的顺序与 train_y.json/test_y.json 的列顺序完全一致
+    # [重要] 这里必须使用生成 CSV 时所用的 13 个类别，顺序不能乱
+    # 你的 CSV 文件是通过 cxr.py 的逻辑生成的，不包含 'No Finding'
     classes = [
-        'No Finding', 'Enlarged Cardiomediastinum', 'Cardiomegaly', 'Lung Opacity',
-        'Lung Lesion', 'Edema', 'Consolidation', 'Pneumonia', 'Atelectasis',
-        'Pneumothorax', 'Pleural Effusion', 'Pleural Other', 'Fracture', 'Support Devices'
+        'Lung opacity', 'Pleural effusion', 'Atelectasis', 'Pneumonia', 
+        'Cardiomegaly', 'Edema', 'Support devices', 'Lung lesion', 
+        'Enlarged cardiomediastinum', 'Consolidation', 'Pneumothorax', 
+        'Fracture', 'Pleural other'
     ]
-    num_labels = len(classes) # 应该为 14
+    num_labels = len(classes) # 13
 
     def __init__(self, root='', mode='train', transform=None):
         """
-        :param root: 数据集的根目录 (例如: /data/mimic_cxr/mimic) [cite: image_e1cd19.png]。
-        :param mode: 'train', 'valid', 或 'test'。
-        :param transform: 应用于图像的 torchvision 变换。
+        :param root: 数据集的根目录，例如 /data/mimic_cxr/PA
+        :param mode: 'train', 'valid', 或 'test'
         """
         self.root = root
         self.transform = transform
-        self.img_folder = 'img_224' # [cite: image_e1cd19.png]
+        
+        # 图片所在的文件夹名
+        self.img_folder_name = 'img_224'
+        self.img_root = os.path.join(self.root, self.img_folder_name)
 
+        # 1. 确定要读取的 CSV 文件名
         if mode == 'train':
-            x_path = os.path.join(self.root, 'train_x.json')
-            y_path = os.path.join(self.root, 'train_y.json')
+            csv_name = 'mimic_train_PA224.csv'
         elif mode == 'valid':
-            # 警告: 您的截图中 [cite: image_e1cd19.png] 没有 'valid' (验证集) 文件。
-            # engine.py [cite: zuiran/splicemix/SpliceMix-3ec25fe712cceeecf44580feff3b6796a1b79b26/engine.py] 在训练期间需要验证集。
-            # 我们将 'valid' 模式指向 'test' 文件 [cite: image_e1cd19.png] 作为替代。
-            print(f"警告: 未找到 'valid' 模式的 JSON 文件。正在使用 'test' JSON 文件 [cite: image_e1cd19.png] 代替。")
-            x_path = os.path.join(self.root, 'test_x.json')
-            y_path = os.path.join(self.root, 'test_y.json')
+            # 你的文件在 /data/mimic_cxr/PA/ 下叫 mimic_val_PA224.csv
+            csv_name = 'mimic_val_PA224.csv' 
         elif mode == 'test':
-            x_path = os.path.join(self.root, 'test_x.json')
-            y_path = os.path.join(self.root, 'test_y.json')
+            csv_name = 'mimic_test_PA224.csv'
         else:
             raise ValueError(f"不支持的 mode: {mode}")
-
-        try:
-            self.x = load_json(x_path) # 加载图像文件名列表
-            self.y = np.array(load_json(y_path), dtype=np.float32) # 加载标签矩阵
-        except FileNotFoundError:
-            print(f"错误: 无法在 {self.root} 中找到 {os.path.basename(x_path)} 或 {os.path.basename(y_path)}")
-            raise
-            
-        print(f"为模式 '{mode}' 加载了 {len(self.x)} 条记录 (从 JSON [cite: image_e1cd19.png])")
         
-        # 验证标签数量是否匹配
+        csv_path = os.path.join(self.root, csv_name)
+        
+        # 2. 检查 CSV 是否存在
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(f"CSV文件未找到: {csv_path}。请确认路径是否正确，文件是否在 /data/mimic_cxr/PA 下。")
+
+        print(f"=> [{mode}] 正在加载 CSV: {csv_path}")
+        
+        # 3. 读取 CSV
+        df = pd.read_csv(csv_path)
+        
+        # 4. 加载数据
+        # CSV 中包含 relative img_path (如 p10/p.../xxx.jpg) 和标签列
+        self.x = df['img_path'].tolist()
+        self.y = df[self.classes].values.astype(np.float32)
+
+        print(f"=> [{mode}] 成功加载 {len(self.x)} 条样本。")
+        
+        # 校验一下
         if self.y.shape[1] != self.num_labels:
-            print(f"警告: 'self.classes' 中的标签数 ({self.num_labels}) 与 'y.json' 中的列数 ({self.y.shape[1]}) 不匹配。")
-            print("请确保 'mimic.py' 中的 'self.classes' 列表与 JSON 文件的列顺序完全一致。")
-            # 尽管如此, 我们还是以 JSON 文件为准
-            self.num_labels = self.y.shape[1] 
+             print(f"警告: CSV 中的列数 ({self.y.shape[1]}) 与代码定义的类别数 ({self.num_labels}) 不匹配！")
 
     def get_number_classes(self):
-        """返回数据集中的标签总数。"""
         return self.num_labels
 
     def __len__(self):
-        """返回数据集中的样本总数。"""
         return len(self.x)
 
     def __getitem__(self, idx):
-        """
-        获取单个数据样本。
-        engine.py [cite: zuiran/splicemix/SpliceMix-3ec25fe712cceeecf44580feff3b6796a1b79b26/engine.py] 中的 on_start_batch [cite: zuiran/splicemix/SpliceMix-3ec25fe712cceeecf44580feff3b6796a1b79b26/engine.py] 期望得到一个字典。
-        """
-        filename = self.x[idx]
+        # CSV 里记录的路径，可能是 'p10/.../id.jpg'
+        filename_record = self.x[idx] 
         label = self.y[idx]
-        #img_path = os.path.join(self.root, self.img_folder, filename)
-        img_path = os.path.join(self.root, filename)
+        
+        # --- [智能路径检测逻辑] ---
+        # 你的 CSV 记录的是深层路径 (p10/p.../xxx.jpg)
+        # 但你的 img_224 可能是扁平的 (只有图片)，也可能保留了结构。
+        
+        # 方式A: 尝试完整路径 (保留了目录结构) -> /data/mimic_cxr/PA/img_224/p10/.../xxx.jpg
+        path_v1 = os.path.join(self.img_root, filename_record)
+        
+        # 方式B: 尝试仅文件名 (扁平目录结构) -> /data/mimic_cxr/PA/img_224/xxx.jpg
+        path_v2 = os.path.join(self.img_root, os.path.basename(filename_record))
+
+        if os.path.exists(path_v1):
+            img_path = path_v1
+        elif os.path.exists(path_v2):
+            img_path = path_v2
+        else:
+            # 都找不到，打印错误并跳过
+            # print(f"[Error] 图片未找到: {filename_record}")
+            # print(f"尝试过: {path_v1} 和 {path_v2}")
+            # 容错：返回下一个样本，避免程序崩溃
+            return self.__getitem__((idx + 1) % len(self))
+
         try:
-            # 强制转换为 'RGB' 以匹配 ResNet101 [cite: zuiran/splicemix/SpliceMix-3ec25fe712cceeecf44580feff3b6796a1b79b26/models/ResNet_101.py] 的 3 通道输入
+            # 强制转为 RGB (适配 ResNet)
             image = Image.open(img_path).convert('RGB')
             
             if self.transform:
                 image = self.transform(image)
             
-            # 返回 engine.py [cite: zuiran/splicemix/SpliceMix-3ec25fe712cceeecf44580feff3b6796a1b79b26/engine.py] 期望的字典格式
-            data = {'image': image, 'target': label, 'name': filename}
+            # 返回 engine.py 需要的字典格式
+            data = {'image': image, 'target': label, 'name': os.path.basename(filename_record)}
             return data
         
-        # 错误处理
-        except FileNotFoundError:
-            print(f"错误：图像文件未找到 {img_path}。正在跳过并加载下一个。")
-            next_idx = (idx + 1) % len(self.x) if len(self.x) > 0 else 0
-            if len(self.x) > 0: return self.__getitem__(next_idx)
-            else: raise IndexError("数据集为空或无法加载任何图像")
         except Exception as e:
-            print(f"加载图像 {img_path} 时出错：{e}。正在跳过并加载下一个。")
-            next_idx = (idx + 1) % len(self.x) if len(self.x) > 0 else 0
-            if len(self.x) > 0: return self.__getitem__(next_idx)
-            else: raise IndexError("数据集为空或无法加载任何图像")
+            print(f"加载图像出错 {img_path}: {e}")
+            return self.__getitem__((idx + 1) % len(self))

@@ -128,11 +128,11 @@ def get_dataset(args):
         train_set = data_dict[args.data_set](data_dir, mode='train', transform=train_transfm)
     
     # --- MODIFIED: 合并了 MIMIC 和 CHEXPERT 的逻辑
-    elif args.data_set in ('MIMIC', 'CHEXPERT'):
+    elif args.data_set in ('MIMIC'):
         data_dir = args.data_root # 假设根目录设置正确
         # MIMIC (JSON-based [cite: image_e1cd19.png]) 和 CHEXPERT (假设) 没有验证集
         # 因此在训练时使用 'test' 模式进行验证
-        test_set = data_dict[args.data_set](data_dir, mode='test', transform=test_transfm)
+        test_set = data_dict[args.data_set](data_dir, mode='valid', transform=test_transfm)
         train_set = data_dict[args.data_set](data_dir, mode='train', transform=train_transfm)
     else:
         raise ValueError(f"未知的数据集: {args.data_set}")
