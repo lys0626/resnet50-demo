@@ -81,21 +81,27 @@ class nihchest(Dataset):
 
         self.y = np.array(self.labels)
         self.classes = self.label_names
-
-        # 3. 计算正负样本权重 (Loss Balancing)
-        if len(self.y) > 0:
-            pos_counts = np.sum(self.y, axis=0)
-            neg_counts = len(self.y) - pos_counts
+        # =========================================================
+        # [新增] 计算类别先验概率 (用于 Logit Adjustment)
+        # =========================================================
+        pos_counts = np.sum(self.y, axis=0)
+        # 计算归一化频率 (Probabilities)
+        self.priors = pos_counts / (np.sum(pos_counts) + 1e-6)
+        # =========================================================
+        # # 3. 计算正负样本权重 (Loss Balancing),代码中并没用采用
+        # if len(self.y) > 0:
+        #     pos_counts = np.sum(self.y, axis=0)
+        #     neg_counts = len(self.y) - pos_counts
             
-            # 防止除零
-            pos_counts = np.where(pos_counts == 0, 1, pos_counts)
-            neg_counts = np.where(neg_counts == 0, 1, neg_counts)
+        #     # 防止除零
+        #     pos_counts = np.where(pos_counts == 0, 1, pos_counts)
+        #     neg_counts = np.where(neg_counts == 0, 1, neg_counts)
             
-            weight_pos = 1.0 / pos_counts
-            weight_neg = 1.0 / neg_counts
-            self.weight = np.stack([weight_neg, weight_pos], axis=1)
-        else:
-            self.weight = np.ones((len(self.classes), 2))
+        #     weight_pos = 1.0 / pos_counts
+        #     weight_neg = 1.0 / neg_counts
+        #     self.weight = np.stack([weight_neg, weight_pos], axis=1)
+        # else:
+        #     self.weight = np.ones((len(self.classes), 2))
 
     def get_number_classes(self):
         return self.num_labels

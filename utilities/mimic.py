@@ -61,12 +61,18 @@ class mimic(Dataset):
         self.x = df['img_path'].tolist()
         self.y = df[self.classes].values.astype(np.float32)
 
+        # =========================================================
+        # [新增] 计算类别先验概率 (用于 Logit Adjustment)
+        # =========================================================
+        pos_counts = np.sum(self.y, axis=0)
+        self.priors = pos_counts / (np.sum(pos_counts) + 1e-6)
+        # =========================================================
         print(f"=> [{mode}] 成功加载 {len(self.x)} 条样本。")
         
         # 校验一下
         if self.y.shape[1] != self.num_labels:
              print(f"警告: CSV 中的列数 ({self.y.shape[1]}) 与代码定义的类别数 ({self.num_labels}) 不匹配！")
-
+    
     def get_number_classes(self):
         return self.num_labels
 

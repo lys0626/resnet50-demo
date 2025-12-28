@@ -14,7 +14,39 @@ from utilities.nih import nihchest
 from utilities.mimic import mimic # 假设类名是 mimic
 from utilities.chexpert import chexpert # 假设类名是 chexpert
 opj = os.path.join
+def get_class_priors(dataset):
+    """
+    计算数据集的类别先验概率 (Class Priors)
+    用于 Logit Adjustment
+    """
+    print("Calculating class priors...")
+    
+    # 1. 获取标签矩阵
+    # 适配 nih.py 和 mimic.py (它们都使用 self.y 存储 numpy 标签)
+    if hasattr(dataset, 'y'):
+        labels = dataset.y  # shape: [N_samples, N_classes]
+    elif hasattr(dataset, 'labels'):
+        labels = np.array(dataset.labels)
+    else:
+        # 如果 dataset 比较大且没有预加载 labels，可能需要遍历 loader (较慢)
+        print("Warning: Could not find 'y' attribute. Iterating dataset to count labels...")
+        labels = []
+        for i in range(len(dataset)):
+            labels.append(dataset[i]['target'])
+        labels = np.array(labels)
 
+    # 2. 计算每个类别的正样本数量
+    class_counts = np.sum(labels, axis=0)
+    
+    # 3. 计算频率 (使用归一化频率，保证和为1)
+    # 加上 1e-6 防止分母为 0
+    total_positives = np.sum(class_counts) + 1e-6
+    class_priors = class_counts / total_positives
+    
+    print(f"  Class Counts: {class_counts}")
+    print(f"  Class Priors: {class_priors}")
+    
+    return class_priors
 def init(args):
     # --- DDP 和 GPU 设置 ---
     if 'LOCAL_RANK' in os.environ:

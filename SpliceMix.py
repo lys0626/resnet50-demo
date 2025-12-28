@@ -50,7 +50,41 @@ class SpliceMix(object):
 
         bs = inputs.shape[0]
         mix_ind = torch.zeros((bs), device=inputs.device)
-        rand_ind = np.asarray([random.sample(range(bs), bs) for i in range(10)]).reshape(-1)  # enough for griding?
+        #rand_ind = np.asarray([random.sample(range(bs), bs)]).reshape(-1)  # enough for griding?
+        # =========================================================
+        # [核心修改 START] Idea 3: Class-Balanced Sampling
+        # 原代码: rand_ind = np.asarray([random.sample(range(bs), bs) for i in range(10)]).reshape(-1)
+        # =========================================================
+        
+        # 1. 计算当前 Batch 内每个类别的频率 (防止除0)
+        # targets shape: [bs, num_classes]
+        batch_class_counts = targets.sum(dim=0).clamp(min=1) 
+        
+        # 2. 计算每个样本的采样权重
+        # 逻辑：样本包含的类别越稀缺 (count越小)，权重 (1/count) 越大
+        # 我们对样本中所有标签的 '稀缺度得分' 求和
+        inverse_freq = 1.0 / batch_class_counts
+        # 利用广播机制计算每个样本的权重
+        sample_weights = (targets * inverse_freq).sum(dim=1)
+        
+        # 处理全阴性样本 (No Finding) 或权重为0的情况
+        # 给予一个极小的基础权重，防止它们永远不被选中
+        sample_weights[sample_weights == 0] = 1e-6
+        
+        # 3. 归一化为概率分布 (转为 numpy 以配合 np.random.choice)
+        sample_probs = sample_weights / sample_weights.sum()
+        sample_probs_np = sample_probs.cpu().numpy()
+        # 再次归一化确保和严格为1，防止浮点误差报错
+        sample_probs_np = sample_probs_np / sample_probs_np.sum()
+        
+        # 4. 生成采样索引 (Weighted Sampling)
+        # size=bs*10 对应原代码生成足够多索引的逻辑
+        # replace=True 允许同一个稀有样本被多次选中 (这是长尾优化的关键！让稀有图在多个grid中出现)
+        rand_ind = np.random.choice(range(bs), size=bs*10, replace=True, p=sample_probs_np)
+        
+        # =========================================================
+        # [核心修改 END] 后续逻辑保持完全不变
+        # =========================================================
         mix_dict = {'rand_inds': [], 'rows': [], 'cols': [], 'n_drops': [], 'drop_inds': []}
             #grids=['1x2', '2x3-2'], n_grids=[1, 2]
         for g, ng in zip(self.grids, self.n_grids):

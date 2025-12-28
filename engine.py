@@ -39,7 +39,26 @@ class Engine(object):
         self.scaler = GradScaler(enabled=not self.args.disable_amp)
 
         args = {}
-        self.model = getattr(models, self.args.model).model(self.args.num_classes, args=args).to(self.rank)
+        
+        # =========================================================
+        # [修改] 准备传递给模型的参数 (Logit Adjustment)
+        # =========================================================
+        model_kwargs = {}
+        # 检查 train_set 是否有 priors 属性 (即是否是我们修改过的 nih/mimic)
+        if hasattr(train_set, 'priors'):
+            self.logger.info(">>> Loaded class priors from dataset for Logit Adjustment.")
+            model_kwargs['use_logit_adj'] = True
+            # 将 numpy 转为 tensor 并放到对应 GPU 上
+            model_kwargs['cls_priors'] = torch.tensor(train_set.priors).float().to(self.rank)
+        
+        # 初始化模型，传入 **model_kwargs
+        self.model = getattr(models, self.args.model).model(
+            self.args.num_classes, 
+            args=args, 
+            **model_kwargs  # <--- 核心修改：传入新参数
+        ).to(self.rank)
+        # =========================================================
+
         self.optimizer = utils.get_optimizer(self.args, self.model)
         self.loss_fn = getattr(models, self.args.model).Loss_fn().to(self.rank)
 
